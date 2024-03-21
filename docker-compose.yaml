@@ -1,0 +1,35 @@
+version: "3"
+services:
+  # cockroach://root@cockroach:26257/postgres?sslmode=disable&serial_normalization=sql_sequence
+  cockroach:
+    image: cockroachdb/cockroach:v23.2.2
+    platform: linux/amd64
+    volumes:
+      - ./data/cockroach:/cockroach/cockroach-data
+    ports:
+      - "8080:8080"
+      - "26257:26257"
+    restart: on-failure
+    command:
+      - start-single-node
+      - --insecure
+      - --max-sql-memory=.25
+      - --cache=.25
+    # environment:
+    #   COCKROACH_DATABASE: grafana
+    #   COCKROACH_USER: grafana
+    #   COCKROACH_PASSWORD: grafana
+
+  # mysql:
+  #   image: mysql:8.0-debian
+  #   platform: linux/amd64
+  #   restart: on-failure
+  #   ports:
+  #     - "3306:3306"
+  #   command:
+  #     - --default-authentication-plugin=mysql_native_password
+  #   environment:
+  #     MYSQL_DATABASE: grafana
+  #     MYSQL_USER: grafana
+  #     MYSQL_PASSWORD: grafana
+  #     MYSQL_ROOT_PASSWORD: root_password
