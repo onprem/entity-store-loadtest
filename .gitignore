@@ -1,1 +1,2 @@
-data/cockroach
+data/cockroach/*
+!data/cockroach/.keep

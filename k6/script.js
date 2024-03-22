@@ -2,12 +2,14 @@ import grpc from 'k6/net/grpc';
 import { check, sleep, randomSeed } from 'k6';
 import encoding from 'k6/encoding';
 import exec from 'k6/execution';
-import { randomItem, randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
+import { crypto } from 'k6/experimental/webcrypto';
 
 const config = {
-  maxStacks: 100,
-  maxApps: 30,
-  createRPS: 300,
+  maxStacks: 10,
+  maxApps: 3,
+  createRPS: 15,
+  chanceUpdate: 0.1,
+  chanceDelete: 0.1,
 }
 
 export const options = {
@@ -26,7 +28,7 @@ export const options = {
       exec: 'create',
       executor: 'ramping-vus',
       stages: [
-        { duration: '1m', target: config.maxApps },
+        { duration: '10s', target: config.maxApps },
         { duration: '3m', target: config.maxApps },
         { duration: '1m', target: 0 },
       ],
@@ -35,9 +37,20 @@ export const options = {
     list: {
       exec: 'list',
       executor: 'per-vu-iterations',
-      // startTime: '1m',
+      startTime: '15s',
       vus: config.maxApps,
-      iterations: 1,
+      iterations: 3,
+    },
+    watch: {
+      exec: 'watch',
+      executor: 'ramping-vus',
+      stages: [
+        { duration: '15s', target: 1 },
+        { duration: '30s', target: config.maxApps},
+        { duration: '3m', target: config.maxApps },
+        { duration: '1m', target: 0 },
+      ],
+      gracefulRampDown: '30s',
     },
   },
   noConnectionReuse: true,
@@ -60,9 +73,18 @@ export function create() {
   };
   const response = client.invoke('entity.EntityStore/Create', data);
 
+  if (response.message.status !== "CREATED") {
+    console.error("create failed: key: ", data.entity.key, "err: ", response.message)
+  }
+ 
   check(response, {
-    'status is OK': (r) => r && r.status === grpc.StatusOK,
+    'grpc status is OK': (r) => r && r.status === grpc.StatusOK,
+    'create status is OK': (r) => r && r.message.status === 'CREATED',
   });
+
+  if (exec.vu.iterationInScenario === 1) {
+    console.log("creating keys similar to: ", data.entity.key)
+  }
 
   // console.log(JSON.stringify(response.message.entity));
 
@@ -78,6 +100,9 @@ export function create() {
 export function list() {
   randomSeed(Date.now())
 
+  // wait randomly for starting, for a maximum of 1m.
+  sleep(Math.random()*10)
+
   client.connect('localhost:10000', {
     plaintext: true
   })
@@ -87,13 +112,14 @@ export function list() {
   var nextPage = ""
   var error = false
   var hasMore = true
+  var i = 0
   while (hasMore) {
     const data = {
       key: [key],
-      with_body: true,
-      with_status: true,
+      withBody: true,
+      withStatus: true,
       limit: 500,
-      next_page_token: nextPage,
+      nextPageToken: nextPage,
     }
 
     const response = client.invoke('entity.EntityStore/List', data);
@@ -104,13 +130,19 @@ export function list() {
       continue
     }
 
-    console.log("list: successful: listed entities: ", response.message.results.length,
-      "; resource_version: ", response.message.resource_version)
+    var msg = response.message
+    msg.results = [];
 
-    nextPage = response.message.next_page_token;
-    if (nextPage !== "") {
+    nextPage = msg.nextPageToken;
+    if (!nextPage) {
       hasMore = false
     }
+
+    console.debug("list(",i,"): successful: listed entities: ", response.message.results.length,
+      "; key: ", key,
+      "; continue: ", nextPage,
+      "; hasMore: ", hasMore)
+    i++;
   }
 
   check(error, {
@@ -120,9 +152,116 @@ export function list() {
   client.close();
 };
 
+export function watch() {
+  randomSeed(Date.now())
+
+  client.connect('localhost:10000', {
+    plaintext: true
+  })
+
+  const key = getKey().allObjects;
+
+  const stream = new grpc.Stream(client, 'entity.EntityStore/Watch', null);
+
+  var count = {
+    updated: 0,
+    deleted: 0,
+    created: 0,
+    rest: 0,
+  }
+
+  stream.on('data', function (event) {
+    switch (event.entity.action) {
+      case 'CREATED':
+        count.created++;
+        if (isLucky(config.chanceUpdate)) {
+          const data = {
+            key: event.entity.key,
+            withBody: true,
+            withStatus: true,
+          }
+          const resp = client.invoke('entity.EntityStore/Read', data);
+
+          check(resp, {
+            'grpc status is OK': (r) => r && r.status === grpc.StatusOK,
+            'no errors in entity': (r) => r && (!r.message.errors || r.message.errors.length === 0),
+          })
+
+          var e = resp.message;
+          e.labels["k6.io/updated"] = "true"
+
+          const updResp = client.invoke('entity.EntityStore/Update', {
+            entity: e,
+          });
+
+          check(updResp, {
+            'grpc status is OK': (r) => r && r.status === grpc.StatusOK,
+            'no errors in entity': (r) => r.message && r.message.status === "UPDATED",
+          })
+
+          console.debug("watch: entity updated! key: ", event.entity.key)
+        } else if (isLucky(config.chanceDelete)) {
+          const resp = client.invoke('entity.EntityStore/Delete', {key: event.entity.key});
+
+          check(resp, {
+            'grpc status is OK': (r) => r && r.status === grpc.StatusOK,
+            'no errors in entity': (r) => r.message && r.message.status === "UPDATED",
+          })
+
+          console.debug("watch: entity deleted! key: ", event.entity.key)
+        }
+        break;
+      case 'DELETED':
+        count.deleted++;
+        break;
+      case 'UPDATED':
+        count.updated++;
+        break;
+      default:
+        count.rest++;
+        break;
+    }
+    console.debug(
+      'watch event: type "' +
+        event.entity.action +
+        '" key "' +
+        event.entity.key
+    );
+  });
+
+  stream.on('end', function () {
+    // The server has finished sending
+    client.close();
+    console.log('watch all done');
+    console.log("watch event key: ", key, "count: ", count)
+  });
+
+  stream.on('error', function (e) {
+    // An error has occurred and the stream has been closed.
+    check(error, {
+      'watch stream is OK': (e) => !e,
+    });
+    console.error('watch error: key: ', key, "err: " + JSON.stringify(e));
+  });
+
+  
+  console.log("starting watch for key: ", key)
+
+  stream.write({
+    key: [key],
+    withBody: true,
+    withStatus: true,
+  });
+
+  sleep(Math.random() * 20 + 20)
+  stream.end()
+}
+
+const randomNameHash = crypto.randomUUID().substring(24).toLowerCase();
+
 const getKey = () => {
-  const appID = exec.vu.idInInstance;
-  const eID = exec.vu.iterationInScenario;
+  const appID = exec.vu.idInInstance % config.maxApps;
+  const eID = exec.vu.iterationInInstance;
 
   const key = {
     // namespace: `stack-${Date.now() % config.maxStacks}`,
@@ -130,7 +269,7 @@ const getKey = () => {
     group: `${appID}.apps.grafana.com`,
     groupVersion: `v0alpha${appID % 3}`,
     resource: `someres-${appID}`,
-    name: `sample-${exec.scenario.startTime}-${eID}`,
+    name: `sample-${randomNameHash}-${appID}-${eID}`,
     string: ``,
     allObjectsScoped: ``,
     allObjects: ``,
@@ -139,7 +278,7 @@ const getKey = () => {
   // /<group>/<resource>[/namespaces/<namespace>][/<name>[/<subresource>]]
   key.string = `/${key.group}/${key.resource}/namespaces/${key.namespace}/${key.name}`;
 
-  key.allObjectsScoped = key.string.replace(/sample-\d+-\d+/, '');
+  key.allObjectsScoped = key.string.replace(/sample-[\w\d]+-\d+-\d+/, '');
   key.allObjects = key.allObjectsScoped.replace(/\/namespaces\/\s+/, '')
 
   return key;
@@ -161,4 +300,12 @@ const newEntity = () => {
     body: encoding.b64encode(JSON.stringify(body)),
     meta: encoding.b64encode(JSON.stringify(metadata))
   }
+}
+
+const isLucky = (chance = 0.5) => {
+  while (chance > 1.00) {
+    chance = chance / 10
+  }
+  const yes = (Math.random() > (1-chance))
+  return yes
 }

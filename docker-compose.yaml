@@ -4,8 +4,9 @@ services:
   cockroach:
     image: cockroachdb/cockroach:v23.2.2
     platform: linux/amd64
-    volumes:
-      - ./data/cockroach:/cockroach/cockroach-data
+    # Uncomment this to enable persistence.
+    # volumes:
+    #   - ./data/cockroach:/cockroach/cockroach-data
     ports:
       - "8080:8080"
       - "26257:26257"
