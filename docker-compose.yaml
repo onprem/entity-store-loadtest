@@ -1,12 +1,13 @@
 version: "3"
+
 services:
-  # cockroach://root@cockroach:26257/postgres?sslmode=disable&serial_normalization=sql_sequence
+  # cockroach://root@cockroach:26257/postgres?sslmode=disable
   cockroach:
     image: cockroachdb/cockroach:v23.2.2
     platform: linux/amd64
     # Uncomment this to enable persistence.
     # volumes:
-    #   - ./data/cockroach:/cockroach/cockroach-data
+    #   - ${PWD}/data/cockroach:/cockroach/cockroach-data
     ports:
       - "8080:8080"
       - "26257:26257"
@@ -20,6 +21,36 @@ services:
     #   COCKROACH_DATABASE: grafana
     #   COCKROACH_USER: grafana
     #   COCKROACH_PASSWORD: grafana
+    healthcheck:
+      test: "curl -f http://localhost:8080/health?ready=1 || 1"
+      start_interval: 5s
+      start_period: 30s
+
+  grafana:
+    image: grafana/grafana-oss-dev:11.1.0-169140
+    entrypoint:
+      - grafana
+      - server
+      - target
+      - --config=/etc/grafana/grafana.ini
+    container_name: grafana
+    restart: unless-stopped
+    # if you are running as root then set it to 0
+    # else find the right id with the id -u command.
+    # On MacOS uid is usually 501, while on linux it
+    # is 1000 for first  non-root user.
+    user: '1000'
+    ports:
+      - '10000:10000'
+    volumes:
+      - type: bind
+        source: ./data/grafana/grafana.ini
+        target: /etc/grafana/grafana.ini
+    environment:
+      GF_DEFAULT_TARGET: storage-server
+    depends_on:
+      cockroach:
+        condition: service_healthy
 
   # mysql:
   #   image: mysql:8.0-debian
