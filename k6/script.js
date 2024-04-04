@@ -5,9 +5,9 @@ import exec from 'k6/execution';
 import { crypto } from 'k6/experimental/webcrypto';
 
 const config = {
-  maxStacks: 10,
+  maxStacks: 1000,
   maxApps: 3,
-  createRPS: 15,
+  createRPS: 300,
   chanceUpdate: 0.1,
   chanceDelete: 0.1,
 }
@@ -29,8 +29,8 @@ export const options = {
       executor: 'ramping-vus',
       stages: [
         { duration: '10s', target: config.maxApps },
-        { duration: '3m', target: config.maxApps },
-        { duration: '1m', target: 0 },
+        { duration: '30s', target: config.maxApps },
+        { duration: '10s', target: 0 },
       ],
       gracefulRampDown: '100ms',
     },
@@ -61,17 +61,27 @@ export const options = {
 const client = new grpc.Client();
 client.load(['definitions'], 'entity.proto');
 
+const grpcParams = {
+  metadata: {
+    "grafana-login": "admin",
+    "grafana-userid": "1",
+    "grafana-orgid": "1"
+  }
+}
+
 export function create() {
   randomSeed(Date.now())
 
   client.connect('localhost:10000', {
-    plaintext: true
+    plaintext: true,
+    timeout: 5
   });
 
   const data = {
     entity: newEntity()
   };
-  const response = client.invoke('entity.EntityStore/Create', data);
+
+  const response = client.invoke('entity.EntityStore/Create', data, grpcParams);
 
   if (response.message.status !== "CREATED") {
     console.error("create failed: key: ", data.entity.key, "err: ", response.message)
@@ -122,7 +132,7 @@ export function list() {
       nextPageToken: nextPage,
     }
 
-    const response = client.invoke('entity.EntityStore/List', data);
+    const response = client.invoke('entity.EntityStore/List', data, grpcParams);
 
     if (response.status !== grpc.StatusOK) {
       error = true
@@ -161,7 +171,7 @@ export function watch() {
 
   const key = getKey().allObjects;
 
-  const stream = new grpc.Stream(client, 'entity.EntityStore/Watch', null);
+  const stream = new grpc.Stream(client, 'entity.EntityStore/Watch', grpcParams);
 
   var count = {
     updated: 0,
@@ -180,7 +190,7 @@ export function watch() {
             withBody: true,
             withStatus: true,
           }
-          const resp = client.invoke('entity.EntityStore/Read', data);
+          const resp = client.invoke('entity.EntityStore/Read', data, grpcParams);
 
           check(resp, {
             'grpc status is OK': (r) => r && r.status === grpc.StatusOK,
@@ -192,7 +202,7 @@ export function watch() {
 
           const updResp = client.invoke('entity.EntityStore/Update', {
             entity: e,
-          });
+          }, grpcParams);
 
           check(updResp, {
             'grpc status is OK': (r) => r && r.status === grpc.StatusOK,
@@ -201,7 +211,7 @@ export function watch() {
 
           console.debug("watch: entity updated! key: ", event.entity.key)
         } else if (isLucky(config.chanceDelete)) {
-          const resp = client.invoke('entity.EntityStore/Delete', {key: event.entity.key});
+          const resp = client.invoke('entity.EntityStore/Delete', {key: event.entity.key}, grpcParams);
 
           check(resp, {
             'grpc status is OK': (r) => r && r.status === grpc.StatusOK,
@@ -260,7 +270,7 @@ export function watch() {
 const randomNameHash = crypto.randomUUID().substring(24).toLowerCase();
 
 const getKey = () => {
-  const appID = exec.vu.idInInstance % config.maxApps;
+  const appID = exec.scenario.iterationInTest % config.maxApps;
   const eID = exec.vu.iterationInInstance;
 
   const key = {

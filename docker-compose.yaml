@@ -26,31 +26,33 @@ services:
       start_interval: 5s
       start_period: 30s
 
-  grafana:
-    image: grafana/grafana-oss-dev:11.1.0-169140
+  storage-server:
+    image: grafana/grafana-oss-dev:11.1.0-170617
     entrypoint:
       - grafana
       - server
       - target
       - --config=/etc/grafana/grafana.ini
-    container_name: grafana
     restart: unless-stopped
-    # if you are running as root then set it to 0
-    # else find the right id with the id -u command.
-    # On MacOS uid is usually 501, while on linux it
-    # is 1000 for first  non-root user.
-    user: '1000'
     ports:
       - '10000:10000'
     volumes:
       - type: bind
-        source: ./data/grafana/grafana.ini
+        source: ./data/grafana/storage-server.ini
         target: /etc/grafana/grafana.ini
     environment:
       GF_DEFAULT_TARGET: storage-server
     depends_on:
       cockroach:
         condition: service_healthy
+
+  # grafana-lgtm:
+  #   image: grafana/otel-lgtm:0.4.0
+  #   ports:
+  #     - "3000:3000"
+  #     - "9090:9090"
+  #     - "4317:4317"
+  #     - "4318:4318"
 
   # mysql:
   #   image: mysql:8.0-debian
