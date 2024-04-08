@@ -27,7 +27,7 @@ services:
       start_period: 30s
 
   storage-server:
-    image: grafana/grafana-oss-dev:11.1.0-170617
+    image: grafana/grafana-oss-dev:11.1.0-170847
     entrypoint:
       - grafana
       - server
@@ -46,13 +46,16 @@ services:
       cockroach:
         condition: service_healthy
 
-  # grafana-lgtm:
-  #   image: grafana/otel-lgtm:0.4.0
-  #   ports:
-  #     - "3000:3000"
-  #     - "9090:9090"
-  #     - "4317:4317"
-  #     - "4318:4318"
+  grafana-lgtm:
+    image: grafana/otel-lgtm:0.4.0
+    ports:
+      - "3000:3000"
+      - "9090:9090"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./data/grafana/provisioning/dashboards:/otel-lgtm/grafana-v10.3.3/conf/provisioning/dashboards
+      - ./data/grafana/dashboards:/var/lib/grafana/dashboards
 
   # mysql:
   #   image: mysql:8.0-debian
