@@ -209,6 +209,7 @@
         "y": 10
       },
       "id": 1,
+      "interval": "10s",
       "options": {
         "legend": {
           "calcs": [],
@@ -229,7 +230,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(action) (rate(k6_watch_events_recieved_total_total{testid=\"$testid\"}[$__rate_interval]))",
+          "expr": "sum by(action) (rate(k6_watch_events_recieved_total{testid=\"$testid\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{action}}",
           "range": true,
@@ -281,6 +282,7 @@
         "y": 10
       },
       "id": 3,
+      "interval": "10s",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -288,7 +290,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "mean"
           ],
           "fields": "",
           "values": false
@@ -305,7 +307,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(action) (rate(k6_watch_events_recieved_total_total{testid=~\"$testid\"}[$__rate_interval]))",
+          "expr": "sum by(action) (rate(k6_watch_events_recieved_total{testid=~\"$testid\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{action}}",
           "range": true,
@@ -350,6 +352,7 @@
         "y": 18
       },
       "id": 4,
+      "interval": "10s",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -375,7 +378,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "k6_watch_events_recieved_total_total{testid=\"$testid\"}",
+          "expr": "k6_watch_events_recieved_total{testid=\"$testid\"}",
           "instant": false,
           "legendFormat": "{{action}}",
           "range": true,
