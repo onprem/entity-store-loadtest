@@ -10,8 +10,8 @@ export const options = {
       exec: 'create',
       executor: 'ramping-vus',
       stages: [
-        { duration: '10s', target: config.maxApps },
-        { duration: '300s', target: config.maxApps },
+        { duration: '10s', target: config.us.maxApps },
+        { duration: `${config.test.durationMins}m`, target: config.us.maxApps },
         { duration: '10s', target: 0 },
       ],
       gracefulRampDown: '100ms',
@@ -20,7 +20,7 @@ export const options = {
       exec: 'list',
       executor: 'per-vu-iterations',
       startTime: '15s',
-      vus: config.maxApps,
+      vus: config.us.maxApps,
       iterations: 3,
     },
     watch: {
@@ -28,16 +28,23 @@ export const options = {
       executor: 'ramping-vus',
       stages: [
         { duration: '5s', target: 1 },
-        { duration: '5s', target: config.maxApps},
-        { duration: '305s', target: config.maxApps },
+        { duration: '5s', target: config.us.maxApps},
+        { duration: `${config.test.durationMins}m`, target: config.us.maxApps },
+        { duration: `15s`, target: config.us.maxApps },
         { duration: '5s', target: 0 },
       ],
       gracefulRampDown: '30s',
     },
   },
-  // tags: {
-  //   testid: `${__ENV.K6_TEST_ID}`,
-  // },
+  tags: {
+    testid: config.test.testID,
+  },
+  cloud: {
+    // Project: Unified Storage Loadtest
+    projectID: config.cloud.projectID,
+    // Test runs with the same name groups test runs together.
+    name: `${config.cloud.name}`,
+  },
   noConnectionReuse: true,
 }
 
@@ -47,9 +54,9 @@ export function create() {
   const entity = newEntity();
   const _resp = usclient.create(entity)
 
-  const jitterRPS = (Math.random() + 0.5) * config.createRPS
-  // (create_latency (avg 30ms) + random_sleep) * RPS = 1.00
-  sleep(1.00 / jitterRPS);
+  const jitterRPS = (config.us.createRPS / config.us.maxApps) * (Math.random() + 0.5);
+  // 1.00 * maxApps / (create_latency (avg 30ms) + random_sleep) = RPS (overall)
+  sleep((1.00 / jitterRPS) - 0.03);
 };
 
 export function list() {
@@ -66,7 +73,10 @@ export function watch() {
   randomSeed(Date.now())
 
   const key = getKey().allObjects;
-  const watchFor = Math.ceil((Math.random() * 20) + 20)
+  const watchFor = Math.ceil(
+    (Math.random() * 20) +
+    (config.test.durationMins * 60)
+  )
 
   const onCreate = (event) => {
     if (isLucky(config.chanceUpdate)) {

@@ -6,12 +6,11 @@ import config from './config.js';
 const randomNameHash = crypto.randomUUID().substring(24).toLowerCase();
 
 export const getKey = () => {
-  const appID = exec.scenario.iterationInTest % config.maxApps;
+  const appID = exec.scenario.iterationInTest % config.us.maxApps;
   const eID = exec.vu.iterationInInstance;
 
   const key = {
-    // namespace: `stack-${Date.now() % config.maxStacks}`,
-    namespace: 'stack-404',
+    namespace: `stack-${eID % config.us.maxStacks}`,
     group: `${appID}.apps.grafana.com`,
     groupVersion: `v0alpha${appID % 3}`,
     resource: `someres-${appID}`,
@@ -24,8 +23,10 @@ export const getKey = () => {
   // /<group>/<resource>[/namespaces/<namespace>][/<name>[/<subresource>]]
   key.string = `/${key.group}/${key.resource}/namespaces/${key.namespace}/${key.name}`;
 
+  // /<group>/<resource>[/namespaces/<namespace>]/
   key.allObjectsScoped = key.string.replace(/sample-[\w\d]+-\d+-\d+/, '');
-  key.allObjects = key.allObjectsScoped.replace(/\/namespaces\/\s+/, '')
+  // /<group>/<resource>/
+  key.allObjects = key.allObjectsScoped.replace(/namespaces\/stack-\d+\//, '')
 
   return key;
 }

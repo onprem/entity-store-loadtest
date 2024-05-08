@@ -27,21 +27,21 @@ services:
       start_period: 30s
 
   storage-server:
-    image: grafana/grafana-oss-dev:11.1.0-170847
-    entrypoint:
-      - grafana
-      - server
+    image: grafana/grafana-oss-dev:11.1.0-171963
+    command:
       - target
       - --config=/etc/grafana/grafana.ini
     restart: unless-stopped
     ports:
       - '10000:10000'
+      - '3001:3000'
     volumes:
       - type: bind
         source: ./data/grafana/storage-server.ini
         target: /etc/grafana/grafana.ini
     environment:
       GF_DEFAULT_TARGET: storage-server
+      # GF_ENTITY_API_DB_TYPE: 'sqlite'
     depends_on:
       cockroach:
         condition: service_healthy

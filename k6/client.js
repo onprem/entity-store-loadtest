@@ -2,6 +2,7 @@ import grpc from 'k6/net/grpc';
 import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 
+import config from './config.js';
 
 const watchCounter = new Counter('watch_events_recieved')
 const grpcRequestsCounter = new Counter('grpc_requests')
@@ -19,7 +20,7 @@ const grpcParams = {
 }
 
 function request(method, data) {
-  client.connect('localhost:10000', {
+  client.connect(config.us.address, {
     plaintext: true,
     timeout: 30
   });
@@ -147,9 +148,11 @@ function getEventOriginTS(event) {
 }
 
 function watch(key, onCreate, onUpdate, onDelete, endAfter) {
-  client.connect('localhost:10000', {
+  const watchStartTS = Date.now();
+
+  client.connect(config.us.address, {
     plaintext: true,
-    timeout: 10
+    timeout: 30
   });
 
   const stream = new grpc.Stream(client, 'entity.EntityStore/Watch', grpcParams);
@@ -162,7 +165,12 @@ function watch(key, onCreate, onUpdate, onDelete, endAfter) {
 
     const tags = {action: event.entity.action};
     watchCounter.add(1, tags)
-    watchEventLatency.add(Date.now() - getEventOriginTS(event), tags)
+    watchEventLatency.add(
+      // Adjust the latency values for events that originated before the Watch
+      // even started.
+      Date.now() - Math.max(watchStartTS, getEventOriginTS(event)),
+      tags,
+    )
 
     switch (event.entity.action) {
       case 'CREATED':
@@ -189,8 +197,7 @@ function watch(key, onCreate, onUpdate, onDelete, endAfter) {
   stream.on('end', function () {
     // The server has finished sending
     client.close();
-    console.log('watch all done');
-    console.log("watch event key: ", key, "count: ", count)
+    console.log('watch all done,', 'key: ', key)
   });
 
   stream.on('error', function (e) {
@@ -204,6 +211,7 @@ function watch(key, onCreate, onUpdate, onDelete, endAfter) {
   console.log("starting watch for key: ", key)
 
   stream.write({
+    action: 'START',
     key: [key],
     withBody: true,
     withStatus: true,
