@@ -1,20 +1,20 @@
 import encoding from 'k6/encoding';
 import exec from 'k6/execution';
 import { crypto } from 'k6/experimental/webcrypto';
-import config from './config.js';
 
-const randomNameHash = crypto.randomUUID().substring(24).toLowerCase();
+import config from './config.js';
 
 export const getKey = () => {
   const appID = exec.scenario.iterationInTest % config.us.maxApps;
   const eID = exec.vu.iterationInInstance;
+  const testID = config.test.testID;
 
   const key = {
     namespace: `stack-${eID % config.us.maxStacks}`,
-    group: `${appID}.apps.grafana.com`,
+    group: `${appID}.${testID}.grafana.com`,
     groupVersion: `v0alpha${appID % 3}`,
     resource: `someres-${appID}`,
-    name: `sample-${randomNameHash}-${appID}-${eID}`,
+    name: `sample-${testID}-${appID}-${eID}`,
     string: ``,
     allObjectsScoped: ``,
     allObjects: ``,
@@ -23,10 +23,10 @@ export const getKey = () => {
   // /<group>/<resource>[/namespaces/<namespace>][/<name>[/<subresource>]]
   key.string = `/${key.group}/${key.resource}/namespaces/${key.namespace}/${key.name}`;
 
-  // /<group>/<resource>[/namespaces/<namespace>]/
-  key.allObjectsScoped = key.string.replace(/sample-[\w\d]+-\d+-\d+/, '');
-  // /<group>/<resource>/
-  key.allObjects = key.allObjectsScoped.replace(/namespaces\/stack-\d+\//, '')
+  // /<group>/<resource>[/namespaces/<namespace>]
+  key.allObjectsScoped = key.string.replace(/\/sample-[\w\d]+-\d+-\d+/, '');
+  // /<group>/<resource>
+  key.allObjects = key.allObjectsScoped.replace(/\/namespaces\/stack-\d+/, '')
 
   return key;
 }
@@ -37,7 +37,12 @@ export const newEntity = () => {
   const labels = {"grafana.app/name": k.name}
   const title = "The " + k.name
   const metadata = {name: k.name, labels: k.labels}
-  const body = {metadata: metadata, spec: {title: title}}
+
+  // Unit32 is 4 bytes. $ bytes * 256 = 1024 bytes or 1 KiB
+  const bodyArray = new Uint32Array(config.us.entitySizeKiB * 256);
+  crypto.getRandomValues(bodyArray);
+
+  const body = {metadata: metadata, spec: {title: title, random: bodyArray}}
 
   return {
     key: k.string,

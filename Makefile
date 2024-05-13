@@ -39,5 +39,6 @@ bench-local: ## Run benchmarking script using locally installed k6
 	K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
 	K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM=true \
 	K6_PROMETHEUS_RW_PUSH_INTERVAL=10s \
+	K6_PROMETHEUS_RW_STALE_MARKERS=true \
 	K6_TEST_ID="$(shell date +%s)" \
 	k6 run -o experimental-prometheus-rw ./k6/script.js

@@ -4,6 +4,7 @@ import { Counter, Trend } from 'k6/metrics';
 
 import config from './config.js';
 
+const listCounter = new Counter('list_entities')
 const watchCounter = new Counter('watch_events_recieved')
 const grpcRequestsCounter = new Counter('grpc_requests')
 const watchEventLatency = new Trend('watch_event_latency')
@@ -20,14 +21,11 @@ const grpcParams = {
 }
 
 function request(method, data) {
-  client.connect(config.us.address, {
-    plaintext: true,
-    timeout: 30
-  });
+  client.connect(config.us.address, { plaintext: true, timeout: '10s' });
 
   const response = client.invoke(`entity.EntityStore/${method}`, data, grpcParams);
 
-  const tags = {method: method, status: `${response.status}`}
+  let tags = {method: method, status: `${response.status}`}
   if (response.message.status) tags['respstatus'] = response.message.status
 
   grpcRequestsCounter.add(1, tags)
@@ -47,6 +45,8 @@ function create(entity) {
   check(resp, {
     'create status is OK': (r) => r && r.message.status === 'CREATED',
   });
+
+  console.debug('created entity, key=', entity.key)
 
   return resp
 }
@@ -97,6 +97,7 @@ function list(key) {
   let nextPage = ""
   let error = false
   let hasMore = true
+  let resourceVersion = 0
 
   let i = 0
   while (hasMore) {
@@ -118,17 +119,21 @@ function list(key) {
 
     var msg = response.message
     results.push(...msg.results)
-    msg.results = [];
 
     nextPage = msg.nextPageToken;
     if (!nextPage) {
       hasMore = false
+      resourceVersion = msg.resourceVersion
     }
+
+    listCounter.add(msg.results.length)
 
     console.debug("list(",i,"): successful: listed entities: ", response.message.results.length,
       "; key: ", key,
       "; continue: ", nextPage,
       "; hasMore: ", hasMore)
+
+    msg.results = [];
     i++;
   }
 
@@ -136,7 +141,10 @@ function list(key) {
     'list status is OK': (e) => e === false,
   });
 
-  return results;
+  return {
+    resourceVersion: resourceVersion,
+    entities: results,
+  };
 };
 
 function getEventOriginTS(event) {
@@ -147,13 +155,17 @@ function getEventOriginTS(event) {
   return event.entity.createdAt
 }
 
-function watch(key, onCreate, onUpdate, onDelete, endAfter) {
+function watch(key, sinceRV, onCreate, onUpdate, onDelete, endAfter) {
   const watchStartTS = Date.now();
 
-  client.connect(config.us.address, {
-    plaintext: true,
-    timeout: 30
-  });
+  try {
+    client.connect(config.us.address, {
+      plaintext: true,
+      timeout: '10s'
+    });
+  } catch(error) {
+    console.error('watch: failed to connect', 'err', error)
+  }
 
   const stream = new grpc.Stream(client, 'entity.EntityStore/Watch', grpcParams);
 
@@ -169,6 +181,7 @@ function watch(key, onCreate, onUpdate, onDelete, endAfter) {
       // Adjust the latency values for events that originated before the Watch
       // even started.
       Date.now() - Math.max(watchStartTS, getEventOriginTS(event)),
+      // Date.now() - event.timestamp,
       tags,
     )
 
@@ -202,17 +215,18 @@ function watch(key, onCreate, onUpdate, onDelete, endAfter) {
 
   stream.on('error', function (e) {
     // An error has occurred and the stream has been closed.
-    check(error, {
+    check(e, {
       'watch stream is OK': (e) => !e,
     });
     console.error('watch error: key: ', key, "err: " + JSON.stringify(e));
   });
 
-  console.log("starting watch for key: ", key)
+  console.log("watch: started watch for key: ", key)
 
   stream.write({
     action: 'START',
     key: [key],
+    since: sinceRV,
     withBody: true,
     withStatus: true,
   });
