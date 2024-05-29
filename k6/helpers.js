@@ -6,7 +6,7 @@ import config from './config.js';
 
 export const getKey = () => {
   const appID = exec.scenario.iterationInTest % config.us.maxApps;
-  const eID = exec.vu.iterationInInstance;
+  const eID = exec.scenario.iterationInTest;
   const testID = config.test.testID;
 
   const key = {
@@ -54,7 +54,7 @@ export const newEntity = () => {
   }
 }
 
-export const isLucky = (chance = 0.5) => {
+export const isLucky = (chance) => {
   while (chance > 1.00) {
     chance = chance / 10
   }

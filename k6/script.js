@@ -21,6 +21,7 @@ export const options = {
       vus: config.us.maxApps,
       iterations: 1,
       executor: 'per-vu-iterations',
+      maxDuration: `${config.test.durationMins*60+30}s`
     },
   },
   tags: {
@@ -41,11 +42,11 @@ export function create() {
   const jitterRPS = (config.us.createRPS / config.us.maxApps) * (Math.random() + 0.5);
   // 1.00 * maxApps / (create_latency (avg 30ms) + random_sleep) = RPS (overall)
   let sleepFor = (1.00 / jitterRPS) - 0.03;
-  console.debug("create: sleeping for", sleepFor, "seconds.")
+  // console.debug("create: sleeping for", sleepFor, "seconds.")
   sleep(sleepFor);
 };
 
-export function listWatch() {
+export async function listWatch() {
   // wait randomly for starting, for a maximum of 30s.
   sleep(10 + Math.random()*20)
 
@@ -55,7 +56,7 @@ export function listWatch() {
 
   console.log("list: finished for app, key=", key, "count=", result.entities.length, "RV=", result.resourceVersion)
 
-  const watchFor = Math.ceil(config.test.durationMins * 60)
+  const watchFor = Math.ceil(config.test.durationMins * 60) + 30
 
   const onCreate = (event) => {
     if (isLucky(config.chanceUpdate)) {
@@ -74,5 +75,5 @@ export function listWatch() {
     }
   }
 
-  usclient.watch(key, result.resourceVersion, onCreate, null, null, watchFor);
+  await usclient.watch(key, result.resourceVersion, onCreate, null, null, watchFor);
 }
