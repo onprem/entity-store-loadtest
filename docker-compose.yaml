@@ -2,29 +2,29 @@ version: "3"
 
 services:
   # cockroach://root@cockroach:26257/postgres?sslmode=disable
-  cockroach:
-    image: cockroachdb/cockroach:v23.2.2
-    platform: linux/amd64
-    # Uncomment this to enable persistence.
-    # volumes:
-    #   - ${PWD}/data/cockroach:/cockroach/cockroach-data
-    ports:
-      - "8080:8080"
-      - "26257:26257"
-    restart: on-failure
-    command:
-      - start-single-node
-      - --insecure
-      - --max-sql-memory=.25
-      - --cache=.25
-    # environment:
-    #   COCKROACH_DATABASE: grafana
-    #   COCKROACH_USER: grafana
-    #   COCKROACH_PASSWORD: grafana
-    healthcheck:
-      test: "curl -f http://localhost:8080/health?ready=1 || 1"
-      start_interval: 5s
-      start_period: 30s
+  # cockroach:
+  #   image: cockroachdb/cockroach:v23.2.2
+  #   platform: linux/amd64
+  #   # Uncomment this to enable persistence.
+  #   # volumes:
+  #   #   - ${PWD}/data/cockroach:/cockroach/cockroach-data
+  #   ports:
+  #     - "8080:8080"
+  #     - "26257:26257"
+  #   restart: on-failure
+  #   command:
+  #     - start-single-node
+  #     - --insecure
+  #     - --max-sql-memory=.25
+  #     - --cache=.25
+  #   # environment:
+  #   #   COCKROACH_DATABASE: grafana
+  #   #   COCKROACH_USER: grafana
+  #   #   COCKROACH_PASSWORD: grafana
+  #   healthcheck:
+  #     test: "curl -f http://localhost:8080/health?ready=1 || 1"
+  #     start_interval: 5s
+  #     start_period: 30s
 
   storage-server:
     image: grafana/grafana-oss-dev:11.1.0-176155
@@ -42,9 +42,9 @@ services:
     environment:
       GF_DEFAULT_TARGET: storage-server
       # GF_ENTITY_API_DB_TYPE: 'sqlite'
-    depends_on:
-      cockroach:
-        condition: service_healthy
+    # depends_on:
+    #   mysql:
+    #     condition: service_healthy
 
   grafana-lgtm:
     image: grafana/otel-lgtm:0.4.0
@@ -61,16 +61,14 @@ services:
       - ./data/grafana/provisioning/dashboards:/otel-lgtm/grafana-v10.3.3/conf/provisioning/dashboards
       - ./data/grafana/dashboards:/var/lib/grafana/dashboards
 
-  # mysql:
-  #   image: mysql:8.0-debian
-  #   platform: linux/amd64
-  #   restart: on-failure
-  #   ports:
-  #     - "3306:3306"
-  #   command:
-  #     - --default-authentication-plugin=mysql_native_password
-  #   environment:
-  #     MYSQL_DATABASE: grafana
-  #     MYSQL_USER: grafana
-  #     MYSQL_PASSWORD: grafana
-  #     MYSQL_ROOT_PASSWORD: root_password
+  # # mysql://grafana:password@mysql:3306/grafana
+  mysql:
+    image: mysql:8.4
+    restart: on-failure
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: grafana
+      MYSQL_USER: grafana
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root_password
