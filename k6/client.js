@@ -27,7 +27,7 @@ function request(method, data) {
     client.connect(config.us.address, { plaintext: true, timeout: '10s', maxReceiveSize: 5e8 });
     response = client.invoke(`entity.EntityStore/${method}`, data, grpcParams);
   } catch(error) {
-    console.error('request error:', error)
+    console.error('request error:', error, 'response:', response)
   }
 
   check(response, {
@@ -35,8 +35,10 @@ function request(method, data) {
   });
 
   let tags = {method: method}
-  if (response.message && response.message.status) tags['respstatus'] = response.message.status
-  if (response.status) tags['status'] = `${response.status}`
+  if (response) {
+    if (response.message && response.message.status) tags['respstatus'] = response.message.status
+    if (response.status) tags['status'] = `${response.status}`
+  }
 
   grpcRequestsCounter.add(1, tags)
 
@@ -49,7 +51,7 @@ function create(entity) {
   const resp = request('Create', {entity: entity})
 
   check(resp, {
-    'create status is OK': (r) => r && r.message.status === 'CREATED',
+    'create status is OK': (r) => r && r.message && r.message.status === 'CREATED',
   });
 
   // console.debug('created entity, key=', entity.key)
@@ -97,13 +99,13 @@ function del(key) {
   return resp
 }
 
-function list(key) {
+function list(key, limit) {
   let results = []
 
   let nextPage = ""
   let error = false
   let hasMore = true
-  let resourceVersion = 0
+  let resourceVersion = -1
 
   let i = 0
   while (hasMore) {
@@ -111,34 +113,36 @@ function list(key) {
       key: [key],
       withBody: true,
       withStatus: true,
-      limit: 500,
+      limit: limit,
       nextPageToken: nextPage,
     }
 
     const response = request('List', data);
 
-    if (response.status !== grpc.StatusOK) {
+    if (!response || response.status !== grpc.StatusOK) {
       console.error("list: error; response=", response)
       error = true
       hasMore = false
-      continue
+      break;
     }
 
-    var msg = response.message
+    let msg = response.message
     results.push(...msg.results)
 
     nextPage = msg.nextPageToken;
-    if (!nextPage) {
+    resourceVersion = msg.resourceVersion
+    if (nextPage === "") {
       hasMore = false
-      resourceVersion = msg.resourceVersion
     }
 
     listCounter.add(msg.results.length)
 
-    console.debug("list(",i,"): successful: listed entities: ", response.message.results.length,
+    console.log("list(",i,"): successful: listed entities: ", response.message.results.length,
       "; key: ", key,
       "; continue: ", nextPage,
-      "; hasMore: ", hasMore)
+      "; hasMore: ", hasMore,
+      "; RV: ", response.message.resourceVersion,
+    )
 
     msg.results = [];
     i++;
@@ -149,7 +153,7 @@ function list(key) {
   });
 
   return {
-    resourceVersion: resourceVersion,
+    resourceVersion,
     entities: results,
   };
 };

@@ -1,6 +1,6 @@
 import { sleep } from 'k6';
 import usclient from './client.js';
-import {getKey, newEntity, isLucky} from './helpers.js';
+import {getKey, newEntity, isLucky, populateConfigInfo} from './helpers.js';
 import config from './config.js';
 
 export const options = {
@@ -8,21 +8,33 @@ export const options = {
     // Creates entities with randomised GVK, namespace, and name
     create: {
       exec: 'create',
-      executor: 'ramping-vus',
+      executor: 'ramping-arrival-rate',
       stages: [
-        { duration: '10s', target: config.us.maxApps },
-        { duration: `${config.test.durationMins}m`, target: config.us.maxApps },
-        { duration: '10s', target: 0 },
+        { target: config.us.createRPS, duration: '40s' },
+        { target: config.us.createRPS, duration: `${config.test.durationMins-1}m` },
+        { target: 0, duration: '20s' },
       ],
-      gracefulRampDown: '100ms',
+      preAllocatedVUs: config.us.maxApps,
+      maxVUs: config.us.maxApps * 10,
     },
-    listWatch: {
-      exec: 'listWatch',
-      vus: config.us.maxApps,
-      iterations: 1,
-      executor: 'per-vu-iterations',
-      maxDuration: `${config.test.durationMins*60+30}s`
-    },
+    // TODO(onprem): Enable this scenario again once Watch starts working.
+    // https://github.com/grafana/search-and-storage-team/issues/28
+    // listWatch: {
+    //   exec: 'listWatch',
+    //   vus: config.us.maxApps,
+    //   iterations: 1,
+    //   executor: 'per-vu-iterations',
+    //   maxDuration: `${config.test.durationMins*60+30}s`
+    // },
+    list: {
+      exec: 'list',
+      executor: 'constant-arrival-rate',
+      duration: `${config.test.durationMins}m`,
+      rate: config.us.maxApps*2,
+      timeUnit: `${Math.min(config.test.durationMins, 10)}m`,
+      preAllocatedVUs: 2,
+      maxVUs: config.us.maxApps,
+    }
   },
   tags: {
     testid: config.test.testID,
@@ -38,12 +50,6 @@ export const options = {
 export function create() {
   const entity = newEntity();
   const _resp = usclient.create(entity)
-
-  const jitterRPS = (config.us.createRPS / config.us.maxApps) * (Math.random() + 0.5);
-  // 1.00 * maxApps / (create_latency (avg 30ms) + random_sleep) = RPS (overall)
-  let sleepFor = (1.00 / jitterRPS) - 0.03;
-  // console.debug("create: sleeping for", sleepFor, "seconds.")
-  sleep(sleepFor);
 };
 
 export async function listWatch() {
@@ -52,14 +58,14 @@ export async function listWatch() {
 
   const key = getKey().allObjects;
 
-  const result = usclient.list(key)
+  const result = usclient.list(key, 500)
 
   console.log("list: finished for app, key=", key, "count=", result.entities.length, "RV=", result.resourceVersion)
 
   const watchFor = Math.ceil(config.test.durationMins * 60) + 30
 
   const onCreate = (event) => {
-    if (isLucky(config.chanceUpdate)) {
+    if (isLucky(config.us.chanceUpdate)) {
       const readResp = usclient.read(event.entity.key)
 
       var e = readResp.message;
@@ -68,7 +74,7 @@ export async function listWatch() {
       const updResp = usclient.update(e);
 
       console.debug("watch: entity updated! key: ", updResp.message.entity.key)
-    } else if (isLucky(config.chanceDelete)) {
+    } else if (isLucky(config.us.chanceDelete)) {
       const resp = usclient.del(event.entity.key);
 
       console.debug("watch: entity deleted! key: ", resp.message.entity.key)
@@ -76,4 +82,16 @@ export async function listWatch() {
   }
 
   await usclient.watch(key, result.resourceVersion, onCreate, null, null, watchFor);
+}
+
+export async function list() {
+  const key = getKey().allObjects;
+
+  const result = usclient.list(key, 3000)
+
+  console.log("list: finished for app, key=", key, "count=", result.entities.length, "RV=", result.resourceVersion)
+}
+
+export function setup() {
+  populateConfigInfo(config)
 }

@@ -1,8 +1,11 @@
 import encoding from 'k6/encoding';
 import exec from 'k6/execution';
 import { crypto } from 'k6/experimental/webcrypto';
+import { Gauge } from 'k6/metrics';
 
 import config from './config.js';
+
+const configInfo = new Gauge('test_config_info')
 
 export const getKey = () => {
   const appID = exec.scenario.iterationInTest % config.us.maxApps;
@@ -60,4 +63,15 @@ export const isLucky = (chance) => {
   }
   const yes = (Math.random() > (1-chance))
   return yes
+}
+
+export const populateConfigInfo = (conf) => {
+  configInfo.add(1, {
+    address: conf.us.address,
+    duration: `${conf.test.durationMins}m`,
+    stacks: `${conf.us.maxStacks}`,
+    apps: `${conf.us.maxApps}`,
+    create_rps: `${conf.us.createRPS}`,
+    entity_size: `${conf.us.entitySizeKiB}KiB`
+  })
 }

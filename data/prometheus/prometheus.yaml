@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  scrape_timeout: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    honor_labels: true
+    # scrape_interval is defined by the configured global (15s).
+    # scrape_timeout is defined by the global default (10s).
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: unified-storage
+    static_configs:
+      - targets: ["storage-server:3000"]
+
+  # - job_name: docker
+  #   docker_sd_configs:
+  #     - host: unix:///var/run/docker.sock
+
+storage:
+  tsdb:
+    out_of_order_time_window: 30m

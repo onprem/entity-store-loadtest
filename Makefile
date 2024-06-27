@@ -22,7 +22,8 @@ bench: ## Run benchmarking script using k6 container image
 	-e K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM=true \
 	-e K6_PROMETHEUS_RW_PUSH_INTERVAL=10s \
 	-e K6_TEST_ID="$(shell date +%s)" \
-	grafana/k6:0.50.0 run -o experimental-prometheus-rw script.js
+	-e K6_US_CREATE_RPS="300" \
+	grafana/k6:0.51.0 run -o experimental-prometheus-rw script.js
 
 stop: ## Stop the services without re-setting container state
 	docker-compose stop

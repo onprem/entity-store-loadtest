@@ -3,18 +3,18 @@ function loadConf() {
     us: {
       address: 'localhost:10000',
       maxStacks: 1000,
-      maxApps: 30,
-      createRPS: 300,
+      maxApps: 50,
+      createRPS: 1000,
       chanceUpdate: 0.1,
       chanceDelete: 0.1,
-      entitySizeKiB: 10,
+      entitySizeKiB: 1,
     },
     cloud: {
       projectID: 3694645,
       name: 'Unified Storage LoadTest',
     },
     test: {
-      durationMins: 5,
+      durationMins: 10,
       testID: 'default',
     },
   };
@@ -40,7 +40,7 @@ function loadConf() {
     dc.cloud.name = __ENV.K6_CLOUD_NAME
   }
 
-  return dc
+  return dc;
 }
 
 function fromEnvOrDefault(key, def) {

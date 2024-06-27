@@ -111,7 +111,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(method, le) (rate(k6_grpc_req_duration_seconds{testid=\"$testid\",method!=\"List\",url!=\"\"}[$__rate_interval]))) * 1000",
+          "expr": "histogram_quantile(0.99, sum by(method, le) (k6_grpc_req_duration_seconds{testid=\"$testid\",method!=\"List\",url!=\"\"})) * 1000",
           "format": "time_series",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
@@ -280,7 +280,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum by (method) (rate(k6_grpc_requests_total{testid=\"$testid\", status=\"OK\"}[$__rate_interval]))",
+          "expr": "sum by (method) (rate(k6_grpc_requests_total{testid=\"$testid\", status=\"OK\"}[30s]))",
           "instant": false,
           "legendFormat": "{{method}}",
           "range": true,
@@ -502,7 +502,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(action) (rate(k6_watch_events_recieved_total{testid=\"$testid\"}[$__rate_interval]))",
+          "expr": "sum by(action) (rate(k6_watch_events_recieved_total{testid=\"$testid\"}[30s]))",
           "instant": false,
           "legendFormat": "{{action}}",
           "range": true,
@@ -590,7 +590,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.9, rate(k6_watch_event_latency{testid=~\"$testid\"}[$__rate_interval]))",
+          "expr": "histogram_quantile(0.99, k6_watch_event_latency{testid=~\"$testid\"})",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -646,7 +646,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "max"
           ],
           "fields": "",
           "values": false
@@ -664,7 +664,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "k6_watch_events_recieved_total{testid=\"$testid\"}",
+          "expr": "sum by (action) (k6_watch_events_recieved_total{testid=\"$testid\"})",
           "instant": false,
           "legendFormat": "{{action}}",
           "range": true,
@@ -741,7 +741,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(action) (rate(k6_watch_events_recieved_total{testid=~\"$testid\"}[$__rate_interval]))",
+          "expr": "sum by(action) (rate(k6_watch_events_recieved_total{testid=~\"$testid\"}[30s]))",
           "instant": false,
           "legendFormat": "{{action}}",
           "range": true,
